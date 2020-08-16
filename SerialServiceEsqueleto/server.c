@@ -17,6 +17,7 @@
 #include    <sys/wait.h>
 #include    <signal.h>
 #include    <pthread.h>
+#include "SerialManager.h"
 
 #define    PORT    "10000"
 #define    BACKLOG    10
