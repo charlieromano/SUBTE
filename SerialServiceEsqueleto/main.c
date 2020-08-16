@@ -24,6 +24,11 @@ int main(void)
 	int rets, retrcv, num;
 	char buffer[MAX_MSG_LEN];
 	char str[MAX_MSG_LEN];
+	char msg_aux[MAX_MSG_LEN];
+	char file_name[MAX_MSG_LEN];
+	char opt, output[MAX_MSG_LEN];
+
+	int value=1;
 
 	printf("Inicio Serial Service\r\n");
 	
@@ -35,17 +40,25 @@ int main(void)
 	{
 		retrcv = serial_receive(buffer, MAX_MSG_LEN);
 		if(retrcv){
-
-			printf("%s\n", buffer);
 			sprintf(str,"%s", buffer);
-			//printf("string %s\n", str);
+			printf("%s", str);
+
+
 			if( strncmp(str, HEADER_INPUT, 14 ) == 0){
-				printf("El archivo es: %c\r\n",str[14]);
-				fdout = fopen("/tmp/out4.txt","w");
-				if ((num = fwrite("1",1, 1, fdout)) == -1)
+				
+				opt = str[14];
+				sprintf(file_name, "/tmp/out%c.txt",opt);
+				value = !value;
+				sprintf(output, "%d",value);
+
+				//printf("%s", output);
+				
+				fdout = fopen(file_name,"w");
+				if ((num = fwrite(output,1, 1, fdout)) == -1)
 				    perror("write");
 				else{
-					printf("wrote %s, %d bytes in /tmp/out4.txt\n", "1",num );
+					sprintf(msg_aux,"wrote %s, %d bytes in /tmp/out%c.txt\n", "1",num, opt);
+					printf("%s", msg_aux);
 					fclose(fdout);
 				}				
 
