@@ -68,7 +68,7 @@ int main(void)
 
 			}
 
-		}
+		}else{
 		sleep(1);
 		serial_send(">OUTS:1,1,1,1\r\n",17);
 		sleep(1);
@@ -79,6 +79,8 @@ int main(void)
 		serial_send(">OUTS:1,1,0,0\r\n",17);
 		sleep(1);
 		serial_send(">OUTS:1,1,1,0\r\n",17);
+		}
+		sleep(1);
 
 	}
 	exit(EXIT_SUCCESS);
