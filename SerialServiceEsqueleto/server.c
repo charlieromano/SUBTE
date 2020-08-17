@@ -174,24 +174,15 @@ int main(void)
 		inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),s, sizeof s);
 		printf("server: got connection from %s\n", s);
 
-/*
-   for (int i=0;i<5;i++){ 
-        if ((new_socket[i] = accept(server_fd, (struct sockaddr *)&address, 
-                        (socklen_t*)&addrlen))<0) 
-        { 
-            perror("accept"); 
-            exit(EXIT_FAILURE); 
-        } 
-    valread = read(new_socket[i], buffer, 1024); 
-    printf("%s\n", buffer);
-*/
+		/* socket send data */
 //		if(!fork()){
 			//close(sockfd);
 			if(send(new_fd, ":LINE3TG\n", 10, 0) == -1)
 			    perror("send");
 			//close(new_fd);
 //		}
-		/* scoket receive data */
+
+		/* socket receive data */
 		byte_count = recv(new_fd, buf, sizeof buf,0);
 		if (byte_count==-1)
 			perror("recv()");
@@ -223,8 +214,8 @@ void sigint_handler(int sig)
 
 void sigkill_handler(int sig)
 {
-    write(0,"myMsg:SIGINT Ctrl+Z user entry\n",31);
-    kill(getpid(), SIGINT);
+    write(0,"myMsg:SIGTSTP Ctrl+Z user entry\n",31);
+    kill(getpid(), SIGTSTP);
     exit(EXIT_SUCCESS);
 }
 
