@@ -17,6 +17,8 @@
 #include    <sys/wait.h>
 #include    <signal.h>
 #include    <pthread.h>
+#include    <sys/stat.h>
+#include    <fcntl.h>
 #include    "SerialManager.h"
 
 #define     PORT          "10000"
@@ -24,6 +26,7 @@
 #define     BAUD_RATE     115200
 #define     MAX_MSG_LEN   50
 #define     HEADER_INPUT  ">TOGGLE STATE:"
+#define     FIFO_NAME "q1"
 
 void sigint_handler(int sig);
 void sigkill_handler(int sig);
@@ -41,7 +44,8 @@ int main(void)
 	/* Threading */
 	pthread_t th2; // el "file desc." del thread 2
 	const char * msg = "Thread secundario";
-	int ret;
+	int fd_FIFO, num_FIFO, ret;
+	char str_FIFO[MAX_MSG_LEN];
 
 	/* Signal SIGINT handling */
     void sigint_handler(int sig);
@@ -53,19 +57,27 @@ int main(void)
             perror("sigaction");
             exit(1);
     }
-
-
+    /* Signal SIGTSTP handling */
     void sigint_handler(int sig);
     struct sigaction sa2;
     sa2.sa_handler = sigkill_handler;
     sa2.sa_flags =  SA_RESTART;// or 0
     sigemptyset(&sa2.sa_mask);
     if(sigaction(SIGTSTP, &sa2, NULL) == -1 ){
-            perror("sigaction");
-            exit(1);
+        perror("sigaction");
+        exit(1);
     }
 
 
+	/* named FIFO for IPC between threads*/
+	mknod(FIFO_NAME, S_IFIFO | 0666,0);
+	fd_FIFO = open(FIFO_NAME, O_RDWR);
+	if( fd_FIFO == -1){
+        perror("FIFO open");
+        exit(1);
+	}
+
+	/* block signals before thread creation*/
 	sigall_block();
 	/* Thread secundario */
 	ret = pthread_create(&th2, NULL, start_thread, (void*)msg);
@@ -128,7 +140,6 @@ int main(void)
 	    break;
 	}
 
-
 	freeaddrinfo(servinfo);
 
 	if(p==NULL){
@@ -175,22 +186,27 @@ int main(void)
 		printf("server: got connection from %s\n", s);
 
 		/* socket send data */
-//		if(!fork()){
-			//close(sockfd);
-			if(send(new_fd, ":LINE3TG\n", 10, 0) == -1)
-			    perror("send");
+		if(send(new_fd, ":LINE3TG\n", 10, 0) == -1){
+		    perror("send");
 			//close(new_fd);
-//		}
+		}
 
 		/* socket receive data */
 		byte_count = recv(new_fd, buf, sizeof buf,0);
 		if (byte_count==-1)
 			perror("recv()");
 		else
-		{
+		{	
 			sprintf(sock_data, "%s", buf);
 			printf("recv() %d bytes of data in buf, content:%s\n",byte_count, sock_data);
 			close(new_fd);
+
+			/* FIFO write*/
+			sprintf(str_FIFO, "%s", buf);
+			if ((num_FIFO = write(fd_FIFO, str_FIFO, strlen(str_FIFO))) == -1){
+				perror("FIFOwrite");
+			}
+
 		}
 
 
@@ -257,6 +273,8 @@ void sigall_unblock(void)
 	pthread_sigmask(SIG_UNBLOCK, &set, NULL);
 }
 
+#define    HEADER_STATES    ":STATES"
+
 void* start_thread (void* message)
 {
 	FILE *fdout;
@@ -266,6 +284,8 @@ void* start_thread (void* message)
 	char msg_aux[MAX_MSG_LEN];
 	char file_name[MAX_MSG_LEN];
 	char opt, output[MAX_MSG_LEN];
+	int fd_FIFO, num_FIFO, ret;
+	char str_FIFO[MAX_MSG_LEN];
 
 	int value=1;
 
@@ -273,6 +293,14 @@ void* start_thread (void* message)
 	
 	rets = serial_open(1,BAUD_RATE);
 	printf("serial_open(): %d\n", rets);
+
+	/* named FIFO for IPC between threads*/
+	mknod(FIFO_NAME, S_IFIFO | 0666,0);
+	fd_FIFO = open(FIFO_NAME, O_RDWR);
+	if( fd_FIFO == -1){
+        perror("FIFO open");
+        exit(1);
+	}
 	
 /*
 	while(1)
@@ -307,11 +335,29 @@ void* start_thread (void* message)
 		//sleep(5);
 	}
 */
+	int out0, out1, out2, out3;
+	char serial_msg_out[MAX_MSG_LEN];
+
 	while(1){
 		
+		if ((num_FIFO = read(fd_FIFO, str_FIFO, MAX_MSG_LEN)) == -1){
+			perror("read");
+		}else{
 
-		printf("%s\n",(const char *) message);
-		sleep(5);
+			if( strncmp(str_FIFO, HEADER_STATES, 7 ) == 0){
+				out0=str_FIFO[7]-'0';
+				out1=str_FIFO[8]-'0';
+				out2=str_FIFO[9]-'0';
+				out3=str_FIFO[10]-'0';
+				sprintf(serial_msg_out,">OUTS:%d,%d,%d,%d\r\n",out0,out1,out2,out3);
+				printf("%s\n", serial_msg_out);
+				serial_send(serial_msg_out,17);
+			}
+		}
+
+
+		printf("%s\n",str_FIFO);
+		//sleep(5);
 
 	}//return NULL;
 
