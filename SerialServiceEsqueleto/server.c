@@ -26,7 +26,8 @@
 #define     BAUD_RATE     115200
 #define     MAX_MSG_LEN   50
 #define     HEADER_INPUT  ">TOGGLE STATE:"
-#define     FIFO_NAME "q1"
+#define     HEADER_STATES ":STATES"
+#define     FIFO_NAME     "q1"
 
 void sigint_handler(int sig);
 void sigkill_handler(int sig);
@@ -164,14 +165,12 @@ int main(void)
 	printf("server: waiting for connections...\n");
 
 
-	/* accept() connections create a new socket (their_addr) each time, then
-	 * fork() creating a child process to manage the incoming connection while
-	 * continue listen()ing.
-	 */
+	/* accept() connections create a new socket new_fd each time*/
 	int byte_count;
 	char buf[MAX_MSG_LEN];
-	flag_exit=0;
-	char sock_data[MAX_MSG_LEN];
+	char sock_data_in[MAX_MSG_LEN];
+	char sock_data_out[MAX_MSG_LEN];
+	int line_num;
 
 	while(1){	
 
@@ -183,13 +182,33 @@ int main(void)
 		    continue;
 		}
 		inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),s, sizeof s);
-		printf("server: got connection from %s\n", s);
+		printf("server accept(): got connection from %s\n", s);
+		/* got connected client in socket at new_fd */
 
-		/* socket send data */
-		if(send(new_fd, ":LINE3TG\n", 10, 0) == -1){
-		    perror("send");
-			//close(new_fd);
+
+
+		/* socket send incoming data */
+		/* FIFO read*/
+/*
+		if ((num_FIFO = read(fd_FIFO, str_FIFO, MAX_MSG_LEN)) == -1){
+			perror("read");
+		}else{
+
+			if( strncmp(str_FIFO, HEADER_INPUT, 14 ) == 0){
+				line_num = str_FIFO[14] - '0';
+				printf("%d\n", line_num);
+				sprintf(sock_data_out,":LINE%dTG\n", line_num);
+				printf("%s\n", sock_data_out);
+				//if(send(new_fd, sock_data_out, 10, 0) == -1){// socket send data 
+				//	perror("send");
+					//close(new_fd);
+				//}
+			}
 		}
+*/
+		/* end of interrupt stream */
+
+
 
 		/* socket receive data */
 		byte_count = recv(new_fd, buf, sizeof buf,0);
@@ -197,17 +216,18 @@ int main(void)
 			perror("recv()");
 		else
 		{	
-			sprintf(sock_data, "%s", buf);
-			printf("recv() %d bytes of data in buf, content:%s\n",byte_count, sock_data);
+			sprintf(sock_data_in, "%s", buf);
+			printf("socket data received (%d bytes):%s\n",byte_count, sock_data_in);
 			close(new_fd);
 
-			/* FIFO write*/
-			sprintf(str_FIFO, "%s", buf);
+			
+			sprintf(str_FIFO, "%s", buf);// FIFO write
 			if ((num_FIFO = write(fd_FIFO, str_FIFO, strlen(str_FIFO))) == -1){
 				perror("FIFOwrite");
 			}
 
-		}
+		}// end of web stream 
+		
 
 
 
@@ -273,7 +293,7 @@ void sigall_unblock(void)
 	pthread_sigmask(SIG_UNBLOCK, &set, NULL);
 }
 
-#define    HEADER_STATES    ":STATES"
+
 
 void* start_thread (void* message)
 {
@@ -321,7 +341,7 @@ void* start_thread (void* message)
 				//printf("%s", output);
 				
 				fdout = fopen(file_name,"w");
-				if ((num = fwrite(output,1, 1, fdout)) == -1)
+				if ((num = write(output,1, 1, fdout)) == -1)
 				    perror("write");
 				else{
 					sprintf(msg_aux,"wrote %s, %d bytes in /tmp/out%c.txt\n", "1",num, opt);
@@ -339,7 +359,23 @@ void* start_thread (void* message)
 	char serial_msg_out[MAX_MSG_LEN];
 
 	while(1){
-		
+
+		/* Serial read, FIFO write */
+		retrcv = serial_receive(buffer, MAX_MSG_LEN);
+		if(retrcv){
+			sprintf(str,"%s", buffer);
+			if( strncmp(str, HEADER_INPUT, 14 ) == 0){
+				sprintf(str_FIFO, "%s", str);
+				// FIFO write
+				if ((num_FIFO = write(fd_FIFO, str_FIFO, strlen(str_FIFO))) == -1){
+					perror("FIFOwrite");
+				}
+			}
+
+				printf("Serial received %s", str);
+		}
+
+		/* FIFO read, Serial write */
 		if ((num_FIFO = read(fd_FIFO, str_FIFO, MAX_MSG_LEN)) == -1){
 			perror("read");
 		}else{
@@ -355,8 +391,9 @@ void* start_thread (void* message)
 			}
 		}
 
-
 		printf("%s\n",str_FIFO);
+
+
 		//sleep(5);
 
 	}//return NULL;
